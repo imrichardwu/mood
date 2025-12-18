@@ -102,6 +102,14 @@ private struct RainforestOverlay: View {
                     .frame(width: w * 0.38, height: h * 0.22)
                     .offset(x: -w * 0.30, y: -h * 0.34)
                     .opacity(scheme == .dark ? 0.55 : 0.85)
+
+                // Tree silhouettes near the bottom
+                TreeLine()
+                    .fill(scheme == .dark
+                          ? Color(red: 0.05, green: 0.09, blue: 0.05).opacity(0.65)
+                          : Color(red: 0.13, green: 0.24, blue: 0.13).opacity(0.14))
+                    .frame(width: w * 0.55, height: h * 0.22)
+                    .offset(x: -w * 0.26, y: h * 0.44)
             }
             .opacity(scheme == .dark ? 0.30 : 0.55)
         }
@@ -113,6 +121,61 @@ private struct RainforestOverlay: View {
         let c = 12345
         let x = (a &* seed &+ c) % max(mod, 1)
         return Double(abs(x))
+    }
+}
+
+private struct TreeLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+        let x0 = rect.minX
+        let y0 = rect.minY
+
+        func addTree(cx: CGFloat, baseY: CGFloat, scale: CGFloat) {
+            let trunkW = 0.05 * w * scale
+            let trunkH = 0.16 * h * scale
+            let canopyH = 0.70 * h * scale
+            let canopyW = 0.28 * w * scale
+
+            // canopy (stacked triangles)
+            let top = CGPoint(x: cx, y: baseY - trunkH - canopyH)
+            let mid1 = CGPoint(x: cx, y: baseY - trunkH - canopyH * 0.55)
+            let mid2 = CGPoint(x: cx, y: baseY - trunkH - canopyH * 0.22)
+
+            p.move(to: top)
+            p.addLine(to: CGPoint(x: cx - canopyW * 0.45, y: top.y + canopyH * 0.35))
+            p.addLine(to: CGPoint(x: cx + canopyW * 0.45, y: top.y + canopyH * 0.35))
+            p.closeSubpath()
+
+            p.move(to: mid1)
+            p.addLine(to: CGPoint(x: cx - canopyW * 0.60, y: mid1.y + canopyH * 0.35))
+            p.addLine(to: CGPoint(x: cx + canopyW * 0.60, y: mid1.y + canopyH * 0.35))
+            p.closeSubpath()
+
+            p.move(to: mid2)
+            p.addLine(to: CGPoint(x: cx - canopyW * 0.75, y: mid2.y + canopyH * 0.38))
+            p.addLine(to: CGPoint(x: cx + canopyW * 0.75, y: mid2.y + canopyH * 0.38))
+            p.closeSubpath()
+
+            // trunk
+            let trunk = CGRect(
+                x: cx - trunkW / 2,
+                y: baseY - trunkH,
+                width: trunkW,
+                height: trunkH
+            )
+            p.addRoundedRect(in: trunk, cornerSize: CGSize(width: trunkW * 0.2, height: trunkW * 0.2))
+        }
+
+        let baseY = y0 + h * 0.95
+        addTree(cx: x0 + w * 0.18, baseY: baseY, scale: 0.75)
+        addTree(cx: x0 + w * 0.34, baseY: baseY, scale: 1.00)
+        addTree(cx: x0 + w * 0.52, baseY: baseY, scale: 0.82)
+        addTree(cx: x0 + w * 0.68, baseY: baseY, scale: 0.92)
+        addTree(cx: x0 + w * 0.84, baseY: baseY, scale: 0.70)
+
+        return p
     }
 }
 

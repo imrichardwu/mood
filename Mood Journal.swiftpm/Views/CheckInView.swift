@@ -186,7 +186,7 @@ struct JournalView: View {
             }
 
             if goalStore.goals.isEmpty {
-                Text("Add a goal to track progress—like entries per week, steps today, or sleep last night.")
+                Text("Add a goal to track progress—like entries per week, journal days, or words written.")
                     .foregroundStyle(.secondary)
             } else if activeGoals.isEmpty {
                 Text("No active goals. Turn one on to start tracking.")

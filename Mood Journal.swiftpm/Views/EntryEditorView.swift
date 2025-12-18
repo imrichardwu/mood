@@ -188,8 +188,7 @@ struct EntryEditorView: View {
                 stress: clippedStress,
                 tags: selectedTags.sorted(by: { $0.displayName < $1.displayName }),
                 note: note,
-                derived: existing.derived,
-                health: existing.health
+                derived: existing.derived
             )
         }
 

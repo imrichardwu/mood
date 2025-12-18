@@ -1,14 +1,11 @@
 import Foundation
-import Darwin
 
 struct WellBeingScorer {
     struct Weights: Hashable {
-        var mood: Double = 0.35
-        var stressInverse: Double = 0.15
-        var energy: Double = 0.15
-        var sentiment: Double = 0.15
-        var sleep: Double = 0.10
-        var steps: Double = 0.10
+        var mood: Double = 0.40
+        var stressInverse: Double = 0.20
+        var energy: Double = 0.20
+        var sentiment: Double = 0.20
     }
 
     struct Component: Hashable, Identifiable {
@@ -17,8 +14,6 @@ struct WellBeingScorer {
             case stressInverse
             case energy
             case sentiment
-            case sleep
-            case steps
         }
 
         let kind: Kind
@@ -43,16 +38,12 @@ struct WellBeingScorer {
         let stressInv = (1.0 - (entry.stress / 10.0)).clamped01()
 
         let sentimentNorm: Double? = entry.derived.sentimentScore.map { (($0 + 1.0) / 2.0).clamped01() }
-        let sleepNorm: Double? = entry.health.sleepHours.map { normalizeSleepHours($0) }
-        let stepsNorm: Double? = entry.health.steps.map { normalizeSteps($0) }
 
         let raw: [(Component.Kind, String, Double, Double?)] = [
             (.mood, "Mood", weights.mood, mood),
             (.stressInverse, "Low stress", weights.stressInverse, stressInv),
             (.energy, "Energy", weights.energy, energy),
-            (.sentiment, "Journal tone", weights.sentiment, sentimentNorm),
-            (.sleep, "Sleep", weights.sleep, sleepNorm),
-            (.steps, "Steps", weights.steps, stepsNorm)
+            (.sentiment, "Journal tone", weights.sentiment, sentimentNorm)
         ]
 
         let availableWeightSum = raw.reduce(0.0) { acc, item in
@@ -70,28 +61,6 @@ struct WellBeingScorer {
 
         let total = components.reduce(0.0) { $0 + $1.points }.clamped(to: 0...100)
         return Breakdown(total: total, components: components)
-    }
-
-    private func normalizeSleepHours(_ hours: Double) -> Double {
-        // Soft target: 8 hours. Give full credit between ~7–9h, taper outside.
-        let h = hours.clamped(to: 0...14)
-        switch h {
-        case 7.0...9.0: return 1.0
-        case 5.0..<7.0: return (h - 5.0) / 2.0 // 0..1
-        case 9.0..<11.0: return 1.0 - ((h - 9.0) / 2.0) * 0.25 // gently taper (1..0.75)
-        default:
-            // below 5h or above 11h: low score, but never 0.
-            return 0.25
-        }
-    }
-
-    private func normalizeSteps(_ steps: Double) -> Double {
-        // Diminishing returns. 0 -> 0.1 baseline, 10k -> ~1.0 cap.
-        let s = steps.clamped(to: 0...30_000)
-        let t = (s / 10_000.0).clamped(to: 0...1)
-        // Ease-out curve.
-        let eased = 1 - pow(1 - t, 2)
-        return max(0.10, eased)
     }
 }
 

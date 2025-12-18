@@ -8,13 +8,6 @@ struct MoodEntry: Identifiable, Codable, Hashable {
         var keywords: [String]
     }
 
-    struct HealthContext: Codable, Hashable {
-        /// Sleep hours for the prior night/day window (best-effort).
-        var sleepHours: Double?
-        /// Total steps for the day (best-effort).
-        var steps: Double?
-    }
-
     var id: UUID
     /// Device-local timestamp at creation/edit time.
     var timestamp: Date
@@ -29,8 +22,6 @@ struct MoodEntry: Identifiable, Codable, Hashable {
 
     /// Enriched data computed on-device.
     var derived: Derived
-    /// Optional, populated if HealthKit is enabled.
-    var health: HealthContext
 
     init(
         id: UUID = UUID(),
@@ -40,8 +31,7 @@ struct MoodEntry: Identifiable, Codable, Hashable {
         stress: Double,
         tags: [Tag] = [],
         note: String = "",
-        derived: Derived = .init(sentimentScore: nil, keywords: []),
-        health: HealthContext = .init(sleepHours: nil, steps: nil)
+        derived: Derived = .init(sentimentScore: nil, keywords: [])
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -51,7 +41,6 @@ struct MoodEntry: Identifiable, Codable, Hashable {
         self.tags = tags
         self.note = note
         self.derived = derived
-        self.health = health
     }
 }
 
