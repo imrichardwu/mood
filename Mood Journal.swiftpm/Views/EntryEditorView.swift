@@ -48,7 +48,7 @@ struct EntryEditorView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.backgroundGradient(for: scheme)
+                AppBackground()
                     .ignoresSafeArea()
 
                 ScrollView {

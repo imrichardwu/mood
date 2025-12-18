@@ -4,7 +4,6 @@ struct JournalView: View {
     @EnvironmentObject private var entryStore: EntryStore
     @EnvironmentObject private var goalStore: GoalStore
     @State private var isPresentingNewEntry = false
-    @Environment(\.colorScheme) private var scheme
     @State private var searchText: String = ""
     @State private var filter: JournalFilter = .all
     @State private var promptSeed: Int = 0
@@ -316,17 +315,6 @@ struct JournalView: View {
         let idx = abs(dayOfYear + promptSeed) % max(prompts.count, 1)
         return prompts[idx]
     }
-
-    private func healthContextForNewEntry() -> MoodEntry.HealthContext? {
-        guard healthkitEnabled else { return nil }
-        let context = MoodEntry.HealthContext(
-            sleepHours: healthKit.lastNightSleepHours,
-            steps: healthKit.todaySteps
-        )
-        // Only attach if we actually have something.
-        if context.sleepHours == nil && context.steps == nil { return nil }
-        return context
-    }
 }
 
 private struct GoalRow: View {
@@ -491,7 +479,7 @@ private struct GoalEditorSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.backgroundGradient(for: scheme)
+                AppBackground()
                     .ignoresSafeArea()
 
                 Form {
@@ -539,14 +527,6 @@ private struct GoalEditorSheet: View {
     @ViewBuilder
     private var targetPicker: some View {
         switch kind {
-        case .sleepLastNight:
-            Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
-                Text(String(format: "Target: %.1f %@", target, kind.unitLabel))
-            }
-        case .stepsToday:
-            Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
-                Text("Target: \(Int(target.rounded())) \(kind.unitLabel)")
-            }
         default:
             Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
                 Text("Target: \(Int(target.rounded())) \(kind.unitLabel)")

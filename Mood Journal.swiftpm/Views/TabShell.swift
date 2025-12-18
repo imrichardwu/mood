@@ -14,7 +14,7 @@ struct TabShell: View {
 
     var body: some View {
         ZStack {
-            AppTheme.backgroundGradient(for: scheme)
+            AppBackground()
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
@@ -35,6 +35,5 @@ struct TabShell: View {
                     .tag(Tab.settings)
             }
         }
-        .tint(AppTheme.tint)
     }
 }

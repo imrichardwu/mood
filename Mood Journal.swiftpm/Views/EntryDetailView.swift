@@ -13,7 +13,7 @@ struct EntryDetailView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.backgroundGradient(for: scheme)
+            AppBackground()
                 .ignoresSafeArea()
 
             ScrollView {
@@ -79,7 +79,7 @@ struct EntryDetailView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-            Text("Includes mood, energy, stress, journal tone (and optional HealthKit context).")
+            Text("Includes mood, energy, stress, and journal tone.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

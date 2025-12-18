@@ -5,21 +5,11 @@ struct ResourcesView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.backgroundGradient(for: scheme)
+            AppBackground()
                 .ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Disclaimer")
-                            .font(.headline)
-                        Text("Mood Journal is a reflection tool. It can help you notice patterns, but it is not medical advice and does not diagnose anything.")
-                            .foregroundStyle(.secondary)
-                        Text("If you feel unsafe or need urgent help, contact local emergency services or a trusted person right now.")
-                            .foregroundStyle(.secondary)
-                    }
-                    .appCard()
-
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Privacy")
                             .font(.headline)
@@ -29,9 +19,9 @@ struct ResourcesView: View {
                     .appCard()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("About trends")
+                        Text("How it works")
                             .font(.headline)
-                        Text("Trends are based on your check‑ins and optional HealthKit context. They are best‑effort summaries and can be noisy—especially with fewer entries.")
+                        Text("Write entries, add tags, and review Trends and Insights over time. Trends are best‑effort summaries and can be noisy—especially with fewer entries.")
                             .foregroundStyle(.secondary)
                     }
                     .appCard()
@@ -39,7 +29,7 @@ struct ResourcesView: View {
                 .padding()
             }
         }
-        .navigationTitle("Resources")
+        .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
