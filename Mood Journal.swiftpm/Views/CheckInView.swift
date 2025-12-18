@@ -2,14 +2,15 @@ import SwiftUI
 
 struct JournalView: View {
     @EnvironmentObject private var entryStore: EntryStore
+    @EnvironmentObject private var goalStore: GoalStore
     @State private var isPresentingNewEntry = false
     @Environment(\.colorScheme) private var scheme
-    @AppStorage("healthkitEnabled") private var healthkitEnabled: Bool = false
-    @StateObject private var healthKit = HealthKitManager()
     @State private var searchText: String = ""
     @State private var filter: JournalFilter = .all
     @State private var promptSeed: Int = 0
     @State private var draftPrefill: String?
+    @State private var goalEditor: Goal?
+    @State private var showingNewGoal = false
 
     enum JournalFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -21,7 +22,7 @@ struct JournalView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.backgroundGradient(for: scheme)
+                AppBackground()
                     .ignoresSafeArea()
 
                 ScrollView {
@@ -29,6 +30,7 @@ struct JournalView: View {
                         header
                         writeCard
                         practiceCard
+                        goalsCard
                         promptCard
 
                         if entryStore.entries.isEmpty {
@@ -53,15 +55,23 @@ struct JournalView: View {
             }
         }
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search notes or tags")
-        .task(id: healthkitEnabled) {
-            guard healthkitEnabled else { return }
-            await healthKit.requestAuthorization()
-            await healthKit.refreshToday()
-        }
         .sheet(isPresented: $isPresentingNewEntry, onDismiss: { draftPrefill = nil }) {
             EntryEditorView(mode: .new, prefillNote: draftPrefill) { saved in
-                let context = healthContextForNewEntry()
-                entryStore.add(saved, healthContext: context)
+                entryStore.add(saved)
+            }
+        }
+        .sheet(item: $goalEditor) { goal in
+            GoalEditorSheet(existing: goal) { updated, isEdit in
+                if isEdit {
+                    goalStore.update(updated)
+                } else {
+                    goalStore.add(updated)
+                }
+            }
+        }
+        .sheet(isPresented: $showingNewGoal) {
+            GoalEditorSheet(existing: nil) { goal, _ in
+                goalStore.add(goal)
             }
         }
     }
@@ -123,23 +133,6 @@ struct JournalView: View {
                     StatChip(title: "Shown", value: "\(visibleEntries.count)", symbol: "line.3.horizontal.decrease.circle")
                 }
             }
-
-            if healthkitEnabled {
-                HStack(spacing: 12) {
-                    if let steps = healthKit.todaySteps {
-                        StatChip(title: "Steps today", value: "\(Int(steps.rounded()))", symbol: "figure.walk")
-                    }
-                    if let sleep = healthKit.lastNightSleepHours {
-                        StatChip(title: "Sleep", value: String(format: "%.1f h", sleep), symbol: "bed.double.fill")
-                    }
-                }
-            }
-
-            if healthkitEnabled, let msg = healthKit.lastErrorMessage {
-                Text(msg)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
         }
         .appCard()
     }
@@ -172,6 +165,63 @@ struct JournalView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+        }
+        .appCard()
+    }
+
+    private var goalsCard: some View {
+        let activeGoals = goalStore.goals.filter(\.isActive)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Goals")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showingNewGoal = true
+                } label: {
+                    Label("Add goal", systemImage: "plus")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+
+            if goalStore.goals.isEmpty {
+                Text("Add a goal to track progress—like entries per week, steps today, or sleep last night.")
+                    .foregroundStyle(.secondary)
+            } else if activeGoals.isEmpty {
+                Text("No active goals. Turn one on to start tracking.")
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(activeGoals) { g in
+                        GoalRow(
+                            goal: g,
+                            progress: g.progress(entries: entryStore.entries)
+                        )
+                        .contextMenu {
+                            Button {
+                                goalEditor = g
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+
+                            Button {
+                                goalStore.toggleActive(g)
+                            } label: {
+                                Label("Pause goal", systemImage: "pause.circle")
+                            }
+
+                            Button(role: .destructive) {
+                                goalStore.delete(g)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        Divider()
+                    }
+                }
+            }
         }
         .appCard()
     }
@@ -256,14 +306,9 @@ struct JournalView: View {
 
     private var promptText: String {
         let prompts: [String] = [
-            "What felt heavy today—and what helped, even a little?",
             "What did you do today that you’re proud of (even if it’s small)?",
-            "What’s one thing you wish someone understood about you right now?",
-            "Where did you feel tension in your body? What might it be asking for?",
-            "What did you avoid today? What would a gentler approach look like?",
             "Name one moment you want to remember from today. Why?",
             "If today had a title, what would it be?",
-            "What’s one boundary you want to practice this week?",
             "What are you grateful for—specifically, and why?",
             "What would you tell a friend who felt exactly like you do right now?"
         ]
@@ -281,6 +326,33 @@ struct JournalView: View {
         // Only attach if we actually have something.
         if context.sleepHours == nil && context.steps == nil { return nil }
         return context
+    }
+}
+
+private struct GoalRow: View {
+    let goal: Goal
+    let progress: Goal.Progress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(goal.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if progress.isComplete {
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.tint)
+                } else {
+                    Text(progress.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ProgressView(value: progress.value, total: max(progress.target, 0.0001))
+                .tint(AppTheme.tint)
+        }
     }
 }
 
@@ -373,24 +445,6 @@ private struct JournalEntryCard: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
-            if entry.health.sleepHours != nil || entry.health.steps != nil {
-                HStack(spacing: 12) {
-                    if let steps = entry.health.steps {
-                        Label("\(Int(steps.rounded()))", systemImage: "figure.walk")
-                            .labelStyle(.titleAndIcon)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    if let sleep = entry.health.sleepHours {
-                        Label(String(format: "%.1f h", sleep), systemImage: "bed.double.fill")
-                            .labelStyle(.titleAndIcon)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -400,6 +454,137 @@ private struct JournalEntryCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+/// Kept inside this file so it is always compiled as part of the main target
+/// (some Swift Playgrounds/Xcode setups can miss new standalone files until refresh).
+private struct GoalEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+
+    let existing: Goal?
+    let onSave: (Goal, /*isEdit*/ Bool) -> Void
+
+    @State private var title: String = ""
+    @State private var kind: Goal.Kind = .entriesToday
+    @State private var target: Double = Goal.Kind.entriesToday.defaultTarget
+    @State private var isActive: Bool = true
+
+    init(existing: Goal?, onSave: @escaping (Goal, Bool) -> Void) {
+        self.existing = existing
+        self.onSave = onSave
+
+        if let existing {
+            _title = State(initialValue: existing.title)
+            _kind = State(initialValue: existing.kind)
+            _target = State(initialValue: existing.target)
+            _isActive = State(initialValue: existing.isActive)
+        } else {
+            _title = State(initialValue: "")
+            _kind = State(initialValue: .entriesToday)
+            _target = State(initialValue: Goal.Kind.entriesToday.defaultTarget)
+            _isActive = State(initialValue: true)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.backgroundGradient(for: scheme)
+                    .ignoresSafeArea()
+
+                Form {
+                    Section("Goal") {
+                        TextField("What do you want to do?", text: $title)
+
+                        Picker("Type", selection: $kind) {
+                            ForEach(Goal.Kind.allCases) { k in
+                                Text(k.displayName).tag(k)
+                            }
+                        }
+                        .onChange(of: kind) { newKind in
+                            // Keep targets sensible when switching types.
+                            let clamped = min(max(target, newKind.targetBounds.lowerBound), newKind.targetBounds.upperBound)
+                            if clamped == target { return }
+                            target = clamped
+                        }
+
+                        targetPicker
+                        Toggle("Active", isOn: $isActive)
+                    }
+
+                    Section {
+                        Text(helperText)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle(existing == nil ? "New Goal" : "Edit Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var targetPicker: some View {
+        switch kind {
+        case .sleepLastNight:
+            Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
+                Text(String(format: "Target: %.1f %@", target, kind.unitLabel))
+            }
+        case .stepsToday:
+            Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
+                Text("Target: \(Int(target.rounded())) \(kind.unitLabel)")
+            }
+        default:
+            Stepper(value: $target, in: kind.targetBounds, step: kind.targetStep) {
+                Text("Target: \(Int(target.rounded())) \(kind.unitLabel)")
+            }
+        }
+    }
+
+    private var helperText: String {
+        switch kind {
+        case .entriesToday:
+            return "Counts how many entries you write today."
+        case .entriesThisWeek:
+            return "Counts how many entries you write this week."
+        case .daysThisWeek:
+            return "Counts how many days this week you journal at least once."
+        case .wordsToday:
+            return "Counts words you write in entries today."
+        case .wordsThisWeek:
+            return "Counts words you write in entries this week."
+        }
+    }
+
+    private func save() {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalTitle = trimmedTitle.isEmpty ? kind.displayName : trimmedTitle
+        let clampedTarget = min(max(target, kind.targetBounds.lowerBound), kind.targetBounds.upperBound)
+
+        if var existing {
+            existing.title = finalTitle
+            existing.kind = kind
+            existing.target = clampedTarget
+            existing.isActive = isActive
+            onSave(existing, true)
+        } else {
+            let g = Goal(title: finalTitle, kind: kind, target: clampedTarget, isActive: isActive)
+            onSave(g, false)
+        }
+        dismiss()
     }
 }
 
