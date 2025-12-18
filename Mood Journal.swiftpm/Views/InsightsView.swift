@@ -39,10 +39,12 @@ struct InsightsView: View {
         }
     }
 
-    private var todayEntry: MoodEntry? {
+    private var todayEntries: [MoodEntry] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
-        return entryStore.entries.first(where: { cal.startOfDay(for: $0.timestamp) == today })
+        return entryStore.entries
+            .filter { cal.startOfDay(for: $0.timestamp) == today }
+            .sorted(by: { $0.timestamp > $1.timestamp })
     }
 
     private var wellbeingCard: some View {
@@ -53,9 +55,8 @@ struct InsightsView: View {
                 Spacer()
             }
 
-            if let entry = todayEntry {
-                let breakdown = scorer.breakdown(for: entry)
-                let shown = breakdown.total
+            if let daily = dailyWellbeingBreakdown(entries: todayEntries) {
+                let shown = daily.total
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(Int(shown.rounded()))")
@@ -65,12 +66,16 @@ struct InsightsView: View {
                     Spacer()
                 }
 
+                Text("Average of \(daily.entryCount) entr\(daily.entryCount == 1 ? "y" : "ies") today")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
                 Text("Why this score?")
                     .font(.subheadline.weight(.semibold))
                     .padding(.top, 6)
 
                 VStack(spacing: 8) {
-                    ForEach(breakdown.components) { c in
+                    ForEach(daily.components) { c in
                         ComponentRow(component: c)
                         Divider()
                     }
@@ -146,6 +151,66 @@ struct InsightsView: View {
                 entry.derived.keywords.contains { $0.lowercased() == k }
             }
             .sorted(by: { $0.timestamp > $1.timestamp })
+    }
+
+    private struct DailyWellbeing: Hashable {
+        let entryCount: Int
+        let total: Double
+        let components: [WellBeingScorer.Component]
+    }
+
+    private func dailyWellbeingBreakdown(entries: [MoodEntry]) -> DailyWellbeing? {
+        guard !entries.isEmpty else { return nil }
+
+        struct Agg {
+            var title: String
+            var pointsSum: Double = 0
+            var weightSum: Double = 0
+            var normalizedSum: Double = 0
+            var normalizedCount: Int = 0
+        }
+
+        let n = Double(entries.count)
+        var agg: [WellBeingScorer.Component.Kind: Agg] = [:]
+
+        for e in entries {
+            let b = scorer.breakdown(for: e)
+            for c in b.components {
+                var a = agg[c.kind] ?? Agg(title: c.title)
+                a.pointsSum += c.points
+                a.weightSum += c.weight
+                if let norm = c.normalized {
+                    a.normalizedSum += norm
+                    a.normalizedCount += 1
+                }
+                agg[c.kind] = a
+            }
+        }
+
+        // Preserve a stable, meaningful order.
+        let order: [WellBeingScorer.Component.Kind] = [
+            .mood,
+            .stressInverse,
+            .energy,
+            .sentiment
+        ]
+
+        let components: [WellBeingScorer.Component] = order.compactMap { kind in
+            guard let a = agg[kind] else { return nil }
+            let avgPoints = a.pointsSum / n
+            let avgWeight = a.weightSum / n
+            let avgNormalized = a.normalizedCount > 0 ? (a.normalizedSum / Double(a.normalizedCount)) : nil
+            return WellBeingScorer.Component(
+                kind: kind,
+                title: a.title,
+                weight: avgWeight,
+                normalized: avgNormalized,
+                points: avgPoints
+            )
+        }
+
+        let total = components.reduce(0.0) { $0 + $1.points }.clamped(to: 0...100)
+        return DailyWellbeing(entryCount: entries.count, total: total, components: components)
     }
 }
 
@@ -308,4 +373,9 @@ private extension InsightsView {
 
 }
 
+extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        return min(max(self, limits.lowerBound), limits.upperBound)
+    }
+}
 
