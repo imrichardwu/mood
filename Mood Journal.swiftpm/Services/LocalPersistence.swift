@@ -29,6 +29,12 @@ struct LocalPersistence {
         let data = try encoder.encode(entries)
         try data.write(to: url, options: [.atomic])
     }
+
+    func deleteEntriesFile() throws {
+        let url = fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
 }
 
 
