@@ -52,9 +52,9 @@ struct EntryDetailView: View {
                 .font(.headline)
 
             HStack(spacing: 12) {
-                MetricPill(title: "Mood", value: Int(e.mood.rounded()), tint: .indigo)
-                MetricPill(title: "Energy", value: Int(e.energy.rounded()), tint: .teal)
-                MetricPill(title: "Stress", value: Int(e.stress.rounded()), tint: .orange)
+                MetricPill(title: "Mood", value: Int(e.mood.rounded()), tint: AppTheme.tint)
+                MetricPill(title: "Energy", value: Int(e.energy.rounded()), tint: AppTheme.energyTint)
+                MetricPill(title: "Stress", value: Int(e.stress.rounded()), tint: AppTheme.stressTint)
             }
 
             if !e.tags.isEmpty {

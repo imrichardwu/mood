@@ -3,15 +3,18 @@ import SwiftUI
 enum AppTheme {
     // Soft, soothing palette that remains readable in both light/dark.
     static let tint = Color(red: 0.20, green: 0.47, blue: 0.27) // rainforest green
+    static let energyTint = Color(red: 0.20, green: 0.62, blue: 0.40)
+    static let stressTint = Color(red: 0.79, green: 0.48, blue: 0.18)
+    static let nightInk = Color(red: 0.07, green: 0.09, blue: 0.05) // warm-olive ink (no blue cast)
 
     static func backgroundGradient(for scheme: ColorScheme) -> LinearGradient {
         switch scheme {
         case .dark:
             return LinearGradient(
                 colors: [
-                    Color(red: 0.05, green: 0.07, blue: 0.06),
-                    Color(red: 0.06, green: 0.09, blue: 0.07),
-                    Color(red: 0.07, green: 0.10, blue: 0.08)
+                    Color(red: 0.04, green: 0.06, blue: 0.03),
+                    Color(red: 0.06, green: 0.08, blue: 0.04),
+                    Color(red: 0.07, green: 0.09, blue: 0.05)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -31,13 +34,13 @@ enum AppTheme {
 
     static func cardBackground(for scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color.white.opacity(0.06)
+            ? Color(red: 0.08, green: 0.11, blue: 0.07).opacity(0.92)
             : Color(red: 0.97, green: 0.99, blue: 0.95).opacity(0.78)
     }
 
     static func cardStroke(for scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color.white.opacity(0.12)
+            ? tint.opacity(0.22)
             : Color.black.opacity(0.06)
     }
 }

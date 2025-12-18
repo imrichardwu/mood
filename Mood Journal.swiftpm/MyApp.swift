@@ -8,6 +8,7 @@ struct MyApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(entryStore)
+                .tint(AppTheme.tint)
         }
     }
 }

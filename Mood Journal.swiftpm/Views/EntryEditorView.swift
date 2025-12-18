@@ -19,6 +19,7 @@ struct EntryEditorView: View {
 
     let mode: Mode
     let onSave: (MoodEntry) -> Void
+    private let prefillNote: String?
 
     @State private var timestamp: Date = .now
     @State private var mood: Double = 6
@@ -27,8 +28,9 @@ struct EntryEditorView: View {
     @State private var selectedTags: Set<Tag> = []
     @State private var note: String = ""
 
-    init(mode: Mode, onSave: @escaping (MoodEntry) -> Void) {
+    init(mode: Mode, prefillNote: String? = nil, onSave: @escaping (MoodEntry) -> Void) {
         self.mode = mode
+        self.prefillNote = prefillNote
         self.onSave = onSave
 
         if case let .edit(entry) = mode {
@@ -38,6 +40,8 @@ struct EntryEditorView: View {
             _stress = State(initialValue: entry.stress)
             _selectedTags = State(initialValue: Set(entry.tags))
             _note = State(initialValue: entry.note)
+        } else if let prefillNote, !prefillNote.isEmpty {
+            _note = State(initialValue: prefillNote)
         }
     }
 
@@ -85,8 +89,8 @@ struct EntryEditorView: View {
                 .datePickerStyle(.compact)
 
             MetricSlider(title: "Mood", value: $mood, tint: AppTheme.tint, icon: "face.smiling")
-            MetricSlider(title: "Energy", value: $energy, tint: Color(red: 0.20, green: 0.62, blue: 0.40), icon: "bolt.fill")
-            MetricSlider(title: "Stress", value: $stress, tint: Color(red: 0.79, green: 0.48, blue: 0.18), icon: "waveform.path.ecg")
+            MetricSlider(title: "Energy", value: $energy, tint: AppTheme.energyTint, icon: "bolt.fill")
+            MetricSlider(title: "Stress", value: $stress, tint: AppTheme.stressTint, icon: "waveform.path.ecg")
 
             Text("Tip: write first, then add numbers if you want.")
                 .font(.footnote)

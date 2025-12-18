@@ -85,20 +85,18 @@ struct SettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
-            Text("If authorization is unavailable: add an Info.plist key named NSHealthShareUsageDescription. (Some SwiftPM templates can’t set this from Package.swift.)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 
     private var aboutSection: some View {
         Section("About") {
-            NavigationLink {
-                ResourcesView()
-            } label: {
-                Label("Resources & disclaimer", systemImage: "heart.text.square")
-            }
-            Label("This app is not medical advice.", systemImage: "info.circle")
+            Text("Mood Journal is a private, on‑device journal for daily check‑ins.")
+                .foregroundStyle(.secondary)
+
+            Text("Write entries, tag what’s going on, and review Trends and Insights over time.")
+                .foregroundStyle(.secondary)
+
+            Text("Optional: connect HealthKit to add steps and sleep context to your insights.")
                 .foregroundStyle(.secondary)
         }
     }

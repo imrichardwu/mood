@@ -142,6 +142,12 @@ struct TrendsView: View {
                         )
                         .foregroundStyle(by: .value("Bucket", s.bucket.displayName))
                     }
+                    .chartForegroundStyleScale([
+                        "Morning": AppTheme.tint.opacity(0.85),
+                        "Afternoon": AppTheme.energyTint.opacity(0.85),
+                        "Evening": AppTheme.stressTint.opacity(0.85),
+                        "Night": AppTheme.tint.opacity(0.55)
+                    ])
                     .chartYScale(domain: 0...10)
                     .frame(height: 160)
                 } else {

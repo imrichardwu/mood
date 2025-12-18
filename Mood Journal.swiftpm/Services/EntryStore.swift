@@ -30,8 +30,15 @@ final class EntryStore: ObservableObject {
     }
 
     func add(_ entry: MoodEntry) {
+        add(entry, healthContext: nil)
+    }
+
+    func add(_ entry: MoodEntry, healthContext: MoodEntry.HealthContext?) {
         var e = entry
         e.derived = nlp.derive(from: entry.note)
+        if let healthContext {
+            e.health = healthContext
+        }
         entries.insert(e, at: 0)
         persistBestEffort()
     }
