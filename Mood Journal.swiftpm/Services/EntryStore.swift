@@ -18,7 +18,17 @@ final class EntryStore: ObservableObject {
     func load() {
         do {
             if let loaded = try persistence.loadEntries() {
-                entries = loaded.sorted(by: { $0.timestamp > $1.timestamp })
+                // Re-derive keywords/sentiment using current extraction rules.
+                // This keeps "Recurring themes" consistent even as the algorithm improves.
+                let refreshed = loaded.map { entry in
+                    var e = entry
+                    e.derived = nlp.derive(from: entry.note)
+                    return e
+                }
+                entries = refreshed.sorted(by: { $0.timestamp > $1.timestamp })
+
+                // Best-effort persist so future loads keep updated derived values.
+                do { try persistence.saveEntries(entries) } catch { /* best-effort */ }
             } else {
                 // First launch (no saved file yet): start empty.
                 entries = []
@@ -109,7 +119,9 @@ private struct EntryNoteAnalyzer {
             "a","an","the","and","or","but","to","of","in","on","for","with","at","from",
             "i","me","my","we","our","you","your","they","their","he","she","it","this","that",
             "is","are","was","were","be","been","being","do","did","does","have","has","had",
-            "as","so","if","then","than","too","very","just","not","no","yes"
+            "as","so","if","then","than","too","very","just","not","no","yes",
+            // Common filler / goal words that show up as unhelpful "themes"
+            "new","make","made","making","get","got","getting","want","wants","wanted","trying","try"
         ]
 
         var counts: [String: Int] = [:]
@@ -121,7 +133,9 @@ private struct EntryNoteAnalyzer {
             options: [.omitWhitespace, .omitPunctuation, .omitOther]
         ) { tag, range in
             guard let tag else { return true }
-            guard tag == .noun || tag == .adjective else { return true }
+            // Include verbs so phrases like "make friends" still yield "friend" even if tagged as a verb.
+            // We still filter generic verbs via stopwords above.
+            guard tag == .noun || tag == .adjective || tag == .verb else { return true }
 
             let token = String(text[range]).lowercased()
             guard token.count >= 3 else { return true }
@@ -147,7 +161,8 @@ private struct EntryNoteAnalyzer {
             "a","an","the","and","or","but","to","of","in","on","for","with","at","from",
             "i","me","my","we","our","you","your","they","their","he","she","it","this","that",
             "is","are","was","were","be","been","being","do","did","does","have","has","had",
-            "as","so","if","then","than","too","very","just","not","no","yes"
+            "as","so","if","then","than","too","very","just","not","no","yes",
+            "new","make","made","making","get","got","getting","want","wants","wanted","trying","try"
         ]
 
         let words = text

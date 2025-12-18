@@ -4,9 +4,14 @@ struct InsightsView: View {
     @EnvironmentObject private var entryStore: EntryStore
     @Environment(\.colorScheme) private var scheme
 
-    @State private var use7DaySmoothing = true
     private let scorer = WellBeingScorer()
     @ScaledMetric(relativeTo: .largeTitle) private var scoreSize: CGFloat = 52
+    @State private var selectedKeyword: SelectedKeyword?
+
+    private struct SelectedKeyword: Identifiable {
+        let word: String
+        var id: String { word }
+    }
 
     var body: some View {
         NavigationStack {
@@ -19,31 +24,38 @@ struct InsightsView: View {
                         wellbeingCard
                         resetMomentCard
                         keywordsCard
-                        gentlePromptCard
+                        
                     }
                     .padding()
                 }
             }
             .navigationTitle("Insights")
         }
+        .sheet(item: $selectedKeyword) { sel in
+            KeywordEntriesSheet(
+                keyword: sel.word,
+                entries: entries(matching: sel.word)
+            )
+        }
     }
 
-    private var latestEntry: MoodEntry? { entryStore.entries.first }
+    private var todayEntry: MoodEntry? {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        return entryStore.entries.first(where: { cal.startOfDay(for: $0.timestamp) == today })
+    }
 
     private var wellbeingCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Well‑Being score")
+                Text("Daily well‑being")
                     .font(.headline)
                 Spacer()
-                Toggle("7‑day", isOn: $use7DaySmoothing)
-                    .labelsHidden()
             }
 
-            if let entry = latestEntry {
-                let today = scorer.breakdown(for: entry)
-                let smoothed = Self.rollingAverageScore(entries: entryStore.entries, scorer: scorer, days: 7)
-                let shown = use7DaySmoothing ? (smoothed ?? today.total) : today.total
+            if let entry = todayEntry {
+                let breakdown = scorer.breakdown(for: entry)
+                let shown = breakdown.total
 
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(Int(shown.rounded()))")
@@ -58,19 +70,16 @@ struct InsightsView: View {
                     .padding(.top, 6)
 
                 VStack(spacing: 8) {
-                    ForEach(today.components) { c in
+                    ForEach(breakdown.components) { c in
                         ComponentRow(component: c)
                         Divider()
                     }
                 }
                 .font(.subheadline)
 
-                Text("This is a supportive reflection tool—not a diagnosis.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+              
             } else {
-                Text("Add a check‑in to generate your first score.")
+                Text("Write an entry today to generate your daily score.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -95,23 +104,33 @@ struct InsightsView: View {
     }
 
     private var keywordsCard: some View {
-        let keywords = Self.recentKeywords(entries: entryStore.entries)
+        let keywords = Self.recentKeywordStats(entries: entryStore.entries)
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Recurring themes (from your journal)")
-                .font(.headline)
+            HStack {
+                Text("Recurring themes")
+                    .font(.headline)
+                Spacer()
+                Text("Last 20 entries")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if keywords.isEmpty {
                 Text("Write a short note in a few entries to see keywords here.")
                     .foregroundStyle(.secondary)
             } else {
-                let cols = [GridItem(.adaptive(minimum: 90), spacing: 10)]
+                Text("Tap a theme to see the entries behind it.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                let cols = [GridItem(.adaptive(minimum: 120), spacing: 10)]
                 LazyVGrid(columns: cols, alignment: .leading, spacing: 10) {
-                    ForEach(keywords, id: \.self) { word in
-                        Text(word)
-                            .font(.callout.weight(.semibold))
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
-                            .background(AppTheme.tint.opacity(0.12))
-                            .clipShape(Capsule())
+                    ForEach(keywords, id: \.word) { item in
+                        Button {
+                            selectedKeyword = SelectedKeyword(word: item.word)
+                        } label: {
+                            KeywordChip(word: item.word, count: item.count)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -119,14 +138,114 @@ struct InsightsView: View {
         .appCard()
     }
 
-    private var gentlePromptCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Gentle prompt")
-                .font(.headline)
-            Text(Self.prompt(from: entryStore.entries))
-                .foregroundStyle(.secondary)
+    
+    private func entries(matching keyword: String) -> [MoodEntry] {
+        let k = keyword.lowercased()
+        return entryStore.entries
+            .filter { entry in
+                entry.derived.keywords.contains { $0.lowercased() == k }
+            }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+    }
+}
+
+private struct KeywordChip: View {
+    let word: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "leaf.fill")
+                .font(.caption)
+                .foregroundStyle(AppTheme.tint)
+
+            Text(word)
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            Text("\(count)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(AppTheme.tint)
+                .clipShape(Capsule())
         }
-        .appCard()
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(AppTheme.tint.opacity(0.10))
+        .overlay(
+            Capsule()
+                .stroke(AppTheme.tint.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(Capsule())
+    }
+}
+
+private struct KeywordEntriesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let keyword: String
+    let entries: [MoodEntry]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                    .ignoresSafeArea()
+
+                if entries.isEmpty {
+                    VStack(spacing: 10) {
+                        Text("No entries found")
+                            .font(.headline)
+                        Text("Try writing a few more entries so themes have more signal.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .appCard()
+                    .padding()
+                } else {
+                    List {
+                        Section {
+                            ForEach(entries) { entry in
+                                NavigationLink {
+                                    EntryDetailView(entry: entry)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text(entry.timestamp, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                                                .font(.subheadline.weight(.semibold))
+                                            Spacer()
+                                            Text("Mood \(Int(entry.mood.rounded()))")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(entry.note)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        } header: {
+                            Text("Entries mentioning “\(keyword)”")
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle(keyword)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
@@ -165,18 +284,12 @@ private struct ComponentRow: View {
 }
 
 private extension InsightsView {
-    static func rollingAverageScore(entries: [MoodEntry], scorer: WellBeingScorer, days: Int) -> Double? {
-        guard !entries.isEmpty else { return nil }
-        let cal = Calendar.current
-        let end = Date()
-        let start = cal.date(byAdding: .day, value: -(days - 1), to: end) ?? end
-        let recent = entries.filter { $0.timestamp >= start && $0.timestamp <= end }
-        guard !recent.isEmpty else { return nil }
-        let totals = recent.map { scorer.breakdown(for: $0).total }
-        return totals.reduce(0, +) / Double(totals.count)
+    struct KeywordStat: Hashable {
+        let word: String
+        let count: Int
     }
 
-    static func recentKeywords(entries: [MoodEntry]) -> [String] {
+    static func recentKeywordStats(entries: [MoodEntry]) -> [KeywordStat] {
         let recent = entries.prefix(20)
         var counts: [String: Int] = [:]
         for e in recent {
@@ -190,25 +303,9 @@ private extension InsightsView {
                 return a.key < b.key
             }
             .prefix(10)
-            .map(\.key)
+            .map { KeywordStat(word: $0.key, count: $0.value) }
     }
 
-    static func prompt(from entries: [MoodEntry]) -> String {
-        guard let latest = entries.first else {
-            return "What’s one small thing you’d like to notice today?"
-        }
-
-        if latest.stress >= 7 {
-            return "Stress looks high. What’s one thing you can make easier in the next hour?"
-        }
-        if latest.energy <= 3 {
-            return "Energy looks low. If you could pick one gentle reset: water, sunlight, or a short walk—what would you choose?"
-        }
-        if latest.mood >= 8 {
-            return "Mood is bright. What helped today—and how can you repeat that tomorrow?"
-        }
-        return "If you name the main feeling right now in one word, what is it?"
-    }
 }
 
 

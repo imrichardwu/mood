@@ -12,7 +12,6 @@ struct SettingsView: View {
 
                 List {
                     profileSection
-                    privacySection
                     aboutSection
                 }
                 .scrollContentBackground(.hidden)
@@ -26,14 +25,6 @@ struct SettingsView: View {
             TextField("Your name", text: $displayName)
                 .textContentType(.givenName)
                 .autocorrectionDisabled()
-        }
-    }
-
-    private var privacySection: some View {
-        Section("Privacy") {
-            Label("On‑device by default", systemImage: "lock.shield")
-            Text("No accounts. No tracking. No uploads.")
-                .foregroundStyle(.secondary)
         }
     }
 

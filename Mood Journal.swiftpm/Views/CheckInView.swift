@@ -6,17 +6,16 @@ struct JournalView: View {
     @State private var isPresentingNewEntry = false
     @AppStorage("displayName") private var displayName: String = ""
     @State private var searchText: String = ""
-    @State private var filter: JournalFilter = .all
     @State private var promptSeed: Int = 0
     @State private var draftPrefill: String?
     @State private var goalEditor: Goal?
     @State private var showingNewGoal = false
+    @State private var calendarMonth: Date = .now
+    @State private var selectedDay: SelectedDay?
 
-    enum JournalFilter: String, CaseIterable, Identifiable {
-        case all = "All"
-        case written = "Written"
-        case tagged = "Tagged"
-        var id: String { rawValue }
+    private struct SelectedDay: Identifiable {
+        let day: Date
+        var id: Date { day }
     }
 
     var body: some View {
@@ -29,9 +28,9 @@ struct JournalView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         header
                         writeCard
-                        practiceCard
+                        calendarCard
                         goalsCard
-                        promptCard
+                        
 
                         if entryStore.entries.isEmpty {
                             emptyState
@@ -59,6 +58,9 @@ struct JournalView: View {
             EntryEditorView(mode: .new, prefillNote: draftPrefill) { saved in
                 entryStore.add(saved)
             }
+        }
+        .sheet(item: $selectedDay) { sel in
+            DayEntriesSheet(day: sel.day, entries: entries(on: sel.day))
         }
         .sheet(item: $goalEditor) { goal in
             GoalEditorSheet(existing: goal) { updated, isEdit in
@@ -126,60 +128,45 @@ struct JournalView: View {
         .appCard()
     }
 
-    private var practiceCard: some View {
+    private var calendarCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Your practice")
+                Text("Calendar")
                     .font(.headline)
                 Spacer()
-                Picker("Filter", selection: $filter) {
-                    ForEach(JournalFilter.allCases) { f in
-                        Text(f.rawValue).tag(f)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 240)
-            }
 
-            HStack(spacing: 12) {
-                StatChip(title: "Streak", value: "\(streakDays)d", symbol: "flame.fill")
-                StatChip(title: "Entries", value: "\(entryStore.entries.count)", symbol: "text.book.closed")
-                if !visibleEntries.isEmpty && visibleEntries.count != entryStore.entries.count {
-                    StatChip(title: "Shown", value: "\(visibleEntries.count)", symbol: "line.3.horizontal.decrease.circle")
-                }
-            }
-        }
-        .appCard()
-    }
-
-    private var promptCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Today’s prompt")
-                    .font(.headline)
-                Spacer()
                 Button {
-                    promptSeed += 1
+                    calendarMonth = Calendar.current.date(byAdding: .month, value: -1, to: calendarMonth) ?? calendarMonth
                 } label: {
-                    Label("Shuffle", systemImage: "shuffle")
+                    Label("Previous month", systemImage: "chevron.left")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Button {
+                    calendarMonth = Calendar.current.date(byAdding: .month, value: 1, to: calendarMonth) ?? calendarMonth
+                } label: {
+                    Label("Next month", systemImage: "chevron.right")
                         .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
 
-            Text(promptText)
-                .font(.body)
+            Text(monthTitle)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Button {
-                draftPrefill = promptText + "\n\n"
-                isPresentingNewEntry = true
-            } label: {
-                Text("Write from prompt")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+            CalendarMonthGrid(
+                month: calendarMonth,
+                entryCountsByDay: entryCountsByDay,
+                streakDays: streakDaySet,
+                selectedDay: selectedDay?.day,
+                onSelect: { day in
+                    selectedDay = SelectedDay(day: day)
+                }
+            )
         }
         .appCard()
     }
@@ -284,7 +271,6 @@ struct JournalView: View {
     private var visibleEntries: [MoodEntry] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return entryStore.entries.filter { entry in
-            if !matchesFilter(entry) { return false }
             guard !q.isEmpty else { return true }
 
             if entry.note.lowercased().contains(q) { return true }
@@ -296,27 +282,35 @@ struct JournalView: View {
         }
     }
 
-    private func matchesFilter(_ entry: MoodEntry) -> Bool {
-        switch filter {
-        case .all:
-            return true
-        case .written:
-            return !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .tagged:
-            return !entry.tags.isEmpty
-        }
+    private var monthTitle: String {
+        calendarMonth.formatted(.dateTime.month(.wide).year())
     }
 
-    private var streakDays: Int {
+    private var entryCountsByDay: [Date: Int] {
+        let cal = Calendar.current
+        return Dictionary(grouping: entryStore.entries) { cal.startOfDay(for: $0.timestamp) }
+            .mapValues { $0.count }
+    }
+
+    private var streakDaySet: Set<Date> {
         let cal = Calendar.current
         let daysWithEntries = Set(entryStore.entries.map { cal.startOfDay(for: $0.timestamp) })
-        var count = 0
+        var set: Set<Date> = []
+
         var day = cal.startOfDay(for: Date())
         while daysWithEntries.contains(day) {
-            count += 1
+            set.insert(day)
             day = cal.date(byAdding: .day, value: -1, to: day) ?? day.addingTimeInterval(-86400)
         }
-        return count
+        return set
+    }
+
+    private func entries(on day: Date) -> [MoodEntry] {
+        let cal = Calendar.current
+        let d = cal.startOfDay(for: day)
+        return entryStore.entries
+            .filter { cal.startOfDay(for: $0.timestamp) == d }
+            .sorted(by: { $0.timestamp > $1.timestamp })
     }
 
     private var promptText: String {
@@ -392,32 +386,6 @@ private struct DaySection: View {
     }
 }
 
-private struct StatChip: View {
-    let title: String
-    let value: String
-    let symbol: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.tint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.subheadline.weight(.semibold))
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(AppTheme.tint.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 private struct JournalEntryCard: View {
     let entry: MoodEntry
     @Environment(\.colorScheme) private var scheme
@@ -458,6 +426,220 @@ private struct JournalEntryCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         )
+    }
+}
+
+private struct CalendarMonthGrid: View {
+    let month: Date
+    let entryCountsByDay: [Date: Int]
+    let streakDays: Set<Date>
+    let selectedDay: Date?
+    let onSelect: (Date) -> Void
+
+    private var cal: Calendar { Calendar.current }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            weekdayHeader
+            grid
+            legend
+        }
+    }
+
+    private var weekdayHeader: some View {
+        let symbols = cal.shortWeekdaySymbols // already localized
+        let first = cal.firstWeekday - 1 // 0-based
+        let ordered = Array(symbols[first...] + symbols[..<first])
+
+        return HStack(spacing: 0) {
+            ForEach(ordered, id: \.self) { s in
+                Text(s.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var grid: some View {
+        let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: month)) ?? month
+        let daysRange = cal.range(of: .day, in: .month, for: startOfMonth) ?? (1..<31)
+        let daysInMonth = daysRange.count
+
+        let weekdayOfFirst = cal.component(.weekday, from: startOfMonth) // 1...7
+        let offset = (weekdayOfFirst - cal.firstWeekday + 7) % 7
+
+        let totalCells = Int(ceil(Double(offset + daysInMonth) / 7.0)) * 7
+        let today = cal.startOfDay(for: Date())
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
+        return LazyVGrid(columns: columns, spacing: 6) {
+            ForEach(0..<totalCells, id: \.self) { idx in
+                let dayNumber = idx - offset + 1
+                if dayNumber < 1 || dayNumber > daysInMonth {
+                    Color.clear
+                        .frame(height: 34)
+                } else {
+                    let date = cal.date(byAdding: .day, value: dayNumber - 1, to: startOfMonth) ?? startOfMonth
+                    let day = cal.startOfDay(for: date)
+                    let count = entryCountsByDay[day] ?? 0
+                    let isInStreak = streakDays.contains(day)
+                    let isToday = day == today
+                    let isSelected = selectedDay.map { cal.startOfDay(for: $0) == day } ?? false
+
+                    Button {
+                        onSelect(day)
+                    } label: {
+                        CalendarDayCell(
+                            day: dayNumber,
+                            count: count,
+                            isInStreak: isInStreak,
+                            isToday: isToday,
+                            isSelected: isSelected
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var legend: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(AppTheme.tint)
+                    .frame(width: 6, height: 6)
+                Text("Entry")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(AppTheme.tint.opacity(0.18))
+                    .frame(width: 14, height: 10)
+                Text("Streak")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+}
+
+private struct CalendarDayCell: View {
+    let day: Int
+    let count: Int
+    let isInStreak: Bool
+    let isToday: Bool
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isInStreak ? AppTheme.tint.opacity(0.18) : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(
+                            isSelected ? AppTheme.tint.opacity(0.95) : (isToday ? AppTheme.tint.opacity(0.6) : Color.primary.opacity(0.06)),
+                            lineWidth: isSelected ? 2 : (isToday ? 1.5 : 1)
+                        )
+                )
+
+            VStack(spacing: 4) {
+                Text("\(day)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                if count > 0 {
+                    if count == 1 {
+                        Circle()
+                            .fill(AppTheme.tint)
+                            .frame(width: 6, height: 6)
+                    } else {
+                        Text("\(min(count, 9))")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.tint)
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    Color.clear.frame(height: 6)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .frame(height: 34)
+    }
+}
+
+private struct DayEntriesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let day: Date
+    let entries: [MoodEntry]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AppBackground()
+                    .ignoresSafeArea()
+
+                if entries.isEmpty {
+                    VStack(spacing: 10) {
+                        Text("No entries")
+                            .font(.headline)
+                        Text("Write something for this day to see it here.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .appCard()
+                    .padding()
+                } else {
+                    List {
+                        Section {
+                            ForEach(entries) { entry in
+                                NavigationLink {
+                                    EntryDetailView(entry: entry)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text(entry.timestamp, format: .dateTime.hour().minute())
+                                                .font(.subheadline.weight(.semibold))
+                                            Spacer()
+                                            Text("Mood \(Int(entry.mood.rounded()))")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(entry.note)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        } header: {
+                            Text(day.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Entries")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 

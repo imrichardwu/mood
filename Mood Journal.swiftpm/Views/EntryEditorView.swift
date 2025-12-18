@@ -148,7 +148,7 @@ struct EntryEditorView: View {
                     )
 
                 if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("What happened today?\nWhat did you notice in your body?\nWhat do you need right now?")
+                    Text("What happened today?\nDid something good happen?")
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 18)
