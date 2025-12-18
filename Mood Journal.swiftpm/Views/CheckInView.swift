@@ -4,6 +4,7 @@ struct JournalView: View {
     @EnvironmentObject private var entryStore: EntryStore
     @EnvironmentObject private var goalStore: GoalStore
     @State private var isPresentingNewEntry = false
+    @AppStorage("displayName") private var displayName: String = ""
     @State private var searchText: String = ""
     @State private var filter: JournalFilter = .all
     @State private var promptSeed: Int = 0
@@ -80,7 +81,7 @@ struct JournalView: View {
             Text(Date.now, format: .dateTime.weekday(.wide).month(.wide).day())
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Write what’s on your mind.")
+            Text(greetingLine)
                 .font(.title2.weight(.semibold))
             Text("This is your private space—kept on-device.")
                 .font(.callout)
@@ -88,6 +89,21 @@ struct JournalView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard()
+    }
+
+    private var greetingLine: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let greeting: String
+        switch hour {
+        case 5..<12: greeting = "Good morning"
+        case 12..<17: greeting = "Good afternoon"
+        case 17..<22: greeting = "Good evening"
+        default: greeting = "Good night"
+        }
+
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "\(greeting)." }
+        return "\(greeting), \(name)."
     }
 
     private var writeCard: some View {

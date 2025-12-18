@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
+    @AppStorage("displayName") private var displayName: String = ""
 
     var body: some View {
         NavigationStack {
@@ -10,12 +11,21 @@ struct SettingsView: View {
                     .ignoresSafeArea()
 
                 List {
+                    profileSection
                     privacySection
                     aboutSection
                 }
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
+        }
+    }
+
+    private var profileSection: some View {
+        Section("Profile") {
+            TextField("Your name", text: $displayName)
+                .textContentType(.givenName)
+                .autocorrectionDisabled()
         }
     }
 
