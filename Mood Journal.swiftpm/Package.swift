@@ -20,7 +20,7 @@ let package = Package(
             displayVersion: "1.0",
             bundleVersion: "1",
             appIcon: .placeholder(icon: .star),
-            accentColor: .presetColor(.indigo),
+            accentColor: .presetColor(.green),
             supportedDeviceFamilies: [
                 .pad,
                 .phone
@@ -36,10 +36,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AppModule",
-            path: ".",
-            exclude: [
-                "Package 2.swift"
-            ]
+            path: "."
         )
     ],
     swiftLanguageVersions: [.version("6")]

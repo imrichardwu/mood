@@ -15,6 +15,7 @@ struct EntryEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @FocusState private var isNoteFocused: Bool
 
     let mode: Mode
     let onSave: (MoodEntry) -> Void
@@ -48,9 +49,9 @@ struct EntryEditorView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        noteCard
                         metricsCard
                         tagsCard
-                        noteCard
                     }
                     .padding()
                 }
@@ -67,21 +68,27 @@ struct EntryEditorView: View {
                 }
             }
         }
+        .onAppear {
+            // Make it feel like a journal: put the cursor in the page.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                isNoteFocused = true
+            }
+        }
     }
 
     private var metricsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Check‑In")
+            Text("How did you feel?")
                 .font(.headline)
 
             DatePicker("Time", selection: $timestamp, displayedComponents: [.date, .hourAndMinute])
                 .datePickerStyle(.compact)
 
-            MetricSlider(title: "Mood", value: $mood, tint: .indigo, icon: "face.smiling")
-            MetricSlider(title: "Energy", value: $energy, tint: .teal, icon: "bolt.fill")
-            MetricSlider(title: "Stress", value: $stress, tint: .orange, icon: "waveform.path.ecg")
+            MetricSlider(title: "Mood", value: $mood, tint: AppTheme.tint, icon: "face.smiling")
+            MetricSlider(title: "Energy", value: $energy, tint: Color(red: 0.20, green: 0.62, blue: 0.40), icon: "bolt.fill")
+            MetricSlider(title: "Stress", value: $stress, tint: Color(red: 0.79, green: 0.48, blue: 0.18), icon: "waveform.path.ecg")
 
-            Text("Tip: keep it simple—your first instinct is usually enough.")
+            Text("Tip: write first, then add numbers if you want.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -118,21 +125,32 @@ struct EntryEditorView: View {
 
     private var noteCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Journal (optional)")
+            Text("Journal")
                 .font(.headline)
 
-            TextEditor(text: $note)
-                .frame(minHeight: 120)
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(AppTheme.cardBackground(for: scheme).opacity(0.55))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppTheme.cardStroke(for: scheme), lineWidth: 1)
-                )
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $note)
+                    .focused($isNoteFocused)
+                    .frame(minHeight: 180)
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(AppTheme.cardBackground(for: scheme).opacity(0.55))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppTheme.cardStroke(for: scheme), lineWidth: 1)
+                    )
+
+                if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("What happened today?\nWhat did you notice in your body?\nWhat do you need right now?")
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 18)
+                        .allowsHitTesting(false)
+                }
+            }
 
             Text("We’ll analyze tone on-device to support trend insights—nothing is uploaded.")
                 .font(.footnote)

@@ -1,28 +1,37 @@
 import SwiftUI
 
-struct CheckInView: View {
+struct JournalView: View {
     @EnvironmentObject private var entryStore: EntryStore
     @State private var isPresentingNewEntry = false
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 14) {
-                header
+            ZStack {
+                AppTheme.backgroundGradient(for: scheme)
+                    .ignoresSafeArea()
 
-                if entryStore.entries.isEmpty {
-                    emptyState
-                } else {
-                    entriesList
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        header
+                        writeCard
+
+                        if entryStore.entries.isEmpty {
+                            emptyState
+                        } else {
+                            journalTimeline
+                        }
+                    }
+                    .padding()
                 }
             }
-            .padding()
-            .navigationTitle("Check‑In")
+            .navigationTitle("Journal")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isPresentingNewEntry = true
                     } label: {
-                        Label("New Entry", systemImage: "plus")
+                        Label("Write", systemImage: "square.and.pencil")
                     }
                 }
             }
@@ -36,9 +45,12 @@ struct CheckInView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("How are you, right now?")
+            Text(Date.now, format: .dateTime.weekday(.wide).month(.wide).day())
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Write what’s on your mind.")
                 .font(.title2.weight(.semibold))
-            Text("Quick check‑ins build a clearer picture over time. Everything stays on your device.")
+            Text("This is your private space—kept on-device.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -46,11 +58,30 @@ struct CheckInView: View {
         .appCard()
     }
 
+    private var writeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New entry")
+                .font(.headline)
+            Text("A few lines is enough. You can also just log how you felt.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                isPresentingNewEntry = true
+            } label: {
+                Text("Write")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .appCard()
+    }
+
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("No entries yet.")
                 .font(.headline)
-            Text("Start with a 10‑second check‑in. You can add a note if you want.")
+            Text("Start with a few lines about today, or just a quick mood check‑in.")
                 .foregroundStyle(.secondary)
             Button {
                 isPresentingNewEntry = true
@@ -63,37 +94,69 @@ struct CheckInView: View {
         .appCard()
     }
 
-    private var entriesList: some View {
-        List {
-            Section("Recent") {
-                ForEach(entryStore.entries) { entry in
+    private var journalTimeline: some View {
+        LazyVStack(alignment: .leading, spacing: 14) {
+            ForEach(groupedEntries, id: \.day) { section in
+                DaySection(
+                    day: section.day,
+                    entries: section.entries,
+                    onDelete: { entryStore.delete($0) }
+                )
+            }
+        }
+    }
+
+    private var groupedEntries: [(day: Date, entries: [MoodEntry])] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: entryStore.entries) { cal.startOfDay(for: $0.timestamp) }
+        return grouped.keys
+            .sorted(by: >)
+            .map { day in
+                let items = (grouped[day] ?? []).sorted(by: { $0.timestamp > $1.timestamp })
+                return (day: day, entries: items)
+            }
+    }
+}
+
+private struct DaySection: View {
+    let day: Date
+    let entries: [MoodEntry]
+    let onDelete: (MoodEntry) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(day, format: .dateTime.month(.wide).day().year())
+                .font(.headline)
+
+            VStack(spacing: 10) {
+                ForEach(entries) { entry in
                     NavigationLink {
                         EntryDetailView(entry: entry)
                     } label: {
-                        EntryRow(entry: entry)
+                        JournalEntryCard(entry: entry)
                     }
-                }
-                .onDelete { indexSet in
-                    for idx in indexSet {
-                        let entry = entryStore.entries[idx]
-                        entryStore.delete(entry)
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            onDelete(entry)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .appCard()
     }
 }
 
-private struct EntryRow: View {
+private struct JournalEntryCard: View {
     let entry: MoodEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(entry.timestamp, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                Text(entry.timestamp, format: .dateTime.hour().minute())
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text("Mood \(Int(entry.mood.rounded()))")
@@ -101,20 +164,31 @@ private struct EntryRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !entry.tags.isEmpty {
-                Text(entry.tags.map(\.displayName).joined(separator: " · "))
-                    .font(.caption)
+            if !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(entry.note)
+                    .font(.body)
+                    .lineLimit(4)
+                    .foregroundStyle(.primary)
+            } else {
+                Text("No text for this entry.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            if !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(entry.note)
-                    .font(.caption)
-                    .lineLimit(2)
+            if !entry.tags.isEmpty {
+                Text(entry.tags.map(\.displayName).joined(separator: " · "))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 

@@ -143,7 +143,7 @@ final class HealthKitManager: ObservableObject {
 
                 // Include "asleep" categories. Apple has multiple values across iOS versions.
                 let asleepValues: Set<Int> = [
-                    HKCategoryValueSleepAnalysis.asleep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
                     HKCategoryValueSleepAnalysis.asleepCore.rawValue,
                     HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
                     HKCategoryValueSleepAnalysis.asleepREM.rawValue

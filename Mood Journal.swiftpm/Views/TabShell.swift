@@ -3,10 +3,10 @@ import SwiftUI
 struct TabShell: View {
     @Environment(\.colorScheme) private var scheme
     @EnvironmentObject private var entryStore: EntryStore
-    @State private var selectedTab: Tab = .checkIn
+    @State private var selectedTab: Tab = .journal
 
     enum Tab: Hashable {
-        case checkIn
+        case journal
         case trends
         case insights
         case settings
@@ -18,9 +18,9 @@ struct TabShell: View {
                 .ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
-                CheckInView()
-                    .tabItem { Label("Check‑In", systemImage: "square.and.pencil") }
-                    .tag(Tab.checkIn)
+                JournalView()
+                    .tabItem { Label("Journal", systemImage: "book.closed") }
+                    .tag(Tab.journal)
 
                 TrendsView()
                     .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
